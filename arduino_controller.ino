@@ -3,8 +3,7 @@
 #include <Bounce2.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
-Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
+#include <medianFilter.h>
 
 #define HWSERIAL Serial1
 //defined(TEENSYDUINO)
@@ -12,9 +11,14 @@ Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 #define BUTTON_B  3
 #define BUTTON_C  8
 
+Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
+
 Bounce debouncer_a = Bounce(); // Instantiate a Bounce object
 Bounce debouncer_b = Bounce(); // Instantiate a Bounce object
 Bounce debouncer_c = Bounce(); // Instantiate a Bounce object
+
+medianFilter filter1; //removing noise from potentiometer
+medianFilter filter2;
 
 enum INPUT_TYPE { BUTTON, RANGE };
 
@@ -24,6 +28,8 @@ void debug_print(String, String = NULL);
 void setup() {
   Serial.begin(9600);
   HWSERIAL.begin(9600);
+  filter1.begin();
+  filter2.begin();
   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
   //splashscreen
@@ -47,7 +53,7 @@ void setup() {
 }
 
 void loop() {
-
+  
   if (canReceiveMessage()) {
     String msg = receiveMessage();
     
@@ -58,7 +64,39 @@ void loop() {
     //sendMessage(test);
   }*/
 
+  publishRange();
   checkButtons();
+
+  delay(100);
+}
+
+
+//[ RANGE SENSORS
+int lastSensorValue1 = 0;
+int lastSensorValue2 = 0;
+void publishRange() {
+  
+  int analogInPin1 = A1;
+  int analogInPin2 = A3;
+  
+  int sensorValue1_noisy = analogRead(analogInPin1);
+  int sensorValue2_noisy = analogRead(analogInPin2);
+  
+  int sensorValue1 = map(sensorValue1_noisy, 0, 1023, 0, 128);
+  int sensorValue2 = map(sensorValue2_noisy, 0, 1023, 0, 128);
+
+  int filteredValue1 = filter1.run(sensorValue1);
+  int filteredValue2 = filter2.run(sensorValue2);
+
+  if (lastSensorValue1 != filteredValue1) {
+    sendData(RANGE, "a", filteredValue1);
+    lastSensorValue1 = filteredValue1;
+  }
+
+  if (lastSensorValue2 != filteredValue2) {
+    sendData(RANGE, "b", filteredValue2);
+    lastSensorValue2 = filteredValue2;
+  }
 }
 
 //[ BUTTONS
