@@ -9,18 +9,20 @@ from oscmessage import OSCMessage
 
 from threading import Lock
 
+mutex = Lock()
+
 minPosition = 0
 maxPosition = 128
 
-horizontalPosition = 0
-verticalPosition = 0
+horizontalPosition = -1
+verticalPosition = -1
 
 ble = Adafruit_BluefruitLE.get_provider()
 ser = None #serial port
 
 try:
     #ser = serial.Serial('/dev/tty.usbmodem2129840', 9600) # bluetooth controller
-    ser = serial.Serial('/dev/tty.usbserial-14110', 115200) # drawing machine
+    ser = serial.Serial('/dev/tty.usbserial-14130', 115200) # drawing machine
     print("[SERIAL] connected")
 except:
     print("[ERROR] unable to init serial connection with device.")
@@ -74,7 +76,7 @@ def main():
 
             # Now wait up to one minute to receive data from the device.
             received = ""
-            while "\n" not in received:
+            while "\r\n" not in received:
                 received += uart.read()
 
             if received is not None:
@@ -87,26 +89,66 @@ def main():
                 if "/range/a" in received:
                     value = result.value
                     updateHorizontal(value)
+                elif "/range/b" in received:
+                    value = result.value
+                    updateVertical(value)
                 elif "/button/a" in received:
-                    draw("G21G91G0Y1F10")
+                    resetMachinePosition()
                 elif "/button/b" in received:
                     resetMachinePosition()
                 elif "/button/c" in received:
                     resetMachinePosition()
+                    print("[APP] stopping program...")
                     break #disconnect
     finally:
         device.disconnect()
 
 def updateHorizontal(value):
-    #draw("G21G91G0Y" + value + "F10")
-    draw("G21G91G0Y1F10")
+    mutex.acquire()
+    global horizontalPosition
 
+    try:
+        updateValue = int(value)
 
-    
+        if horizontalPosition == -1:
+            horizontalPosition = updateValue
+            return
+
+        delta = updateValue - horizontalPosition
+        horizontalPosition = updateValue
+        command = 'G21G91G0X{0}Y{0}F10'.format(delta)
+        draw(command)
+    finally:
+        mutex.release()
+
+def updateVertical(value):
+    mutex.acquire()
+    global verticalPosition
+
+    try:
+        updateValue = int(value)
+
+        if verticalPosition == -1:
+            verticalPosition = updateValue
+            return
+
+        delta = updateValue - verticalPosition
+        verticalPosition = updateValue
+        command = 'G21G91G0X{0}Y{1}F10'.format(delta, -delta)
+        draw(command)
+    finally:
+        mutex.release()
 
 def resetMachinePosition():
-    draw("G90 G0 X0 Y0")
-    draw("G90 G0 Z0")
+    mutex.acquire()
+    try:
+        print("[POSITION] reset")
+        draw("G90 G0 X0 Y0")
+        draw("G90 G0 Z0")
+        horizontalPosition = -1
+        verticalPosition = -1
+    finally:
+        mutex.release()
 
 # UP: G21G91G0X-10Y10F10
 # DOWN: G21G91G0X10Y-10F10
