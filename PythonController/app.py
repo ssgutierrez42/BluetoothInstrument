@@ -22,7 +22,7 @@ ser = None #serial port
 
 try:
     #ser = serial.Serial('/dev/tty.usbmodem2129840', 9600) # bluetooth controller
-    ser = serial.Serial('/dev/tty.usbserial-14130', 115200) # drawing machine
+    ser = serial.Serial('/dev/tty.usbserial-14310', 115200) # drawing machine
     print("[SERIAL] connected")
 except:
     print("[ERROR] unable to init serial connection with device.")
@@ -94,8 +94,8 @@ def main():
                     updateVertical(value)
                 elif "/button/a" in received:
                     resetMachinePosition()
-                elif "/button/b" in received:
-                    resetMachinePosition()
+                #elif "/button/b" in received:
+                    #resetMachinePosition()
                 elif "/button/c" in received:
                     resetMachinePosition()
                     print("[APP] stopping program...")
